@@ -158,6 +158,8 @@ def send_notifications_api():
                    f"Temp: {weather['temperature']}°C, "
                    f"Humidity: {weather['humidity']}%.")
 
+        print(f"Message:\n{message}")
+
         for method in user["notification_method"]:
             if method == "email" and user["email_id"]:
                 status = send_email(user["email_id"], "Weather Update", message)
@@ -171,11 +173,21 @@ def send_notifications_api():
 
     return jsonify({"notifications_sent": notifications}), 200
 
+
 def fetch_weather_from_api(location):
     url = WEATHER_SERVICE_BASE_URL + "current_weather?location=" + location
     response = requests.get(url)
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+
+    current = data.get("current", {})
+
+    return {
+        "weather_description": ", ".join(current.get("weather_descriptions", [])),
+        "temperature": current.get("temperature"),
+        "humidity": current.get("humidity"),
+        "icon": current.get("weather_icons", [""])[0]
+    }
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
