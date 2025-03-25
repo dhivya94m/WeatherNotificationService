@@ -175,13 +175,15 @@ def send_notifications_api():
 
 
 def fetch_weather_from_api(location):
+    print(f"before forming url:\n{location}")
     url = WEATHER_SERVICE_BASE_URL + "current_weather?location=" + location
+    print(f"after forming url:\n{url}")
     response = requests.get(url)
     response.raise_for_status()
     data = response.json()
 
     current = data.get("current", {})
-
+    print(f"response:\n{data}")
     return {
         "weather_description": ", ".join(current.get("weather_descriptions", [])),
         "temperature": current.get("temperature"),
