@@ -18,6 +18,7 @@ EMAIL_SENDER = "anilasatyavolu@gmail.com"
 
 #Weather-api-service base url
 WEATHER_SERVICE_BASE_URL = os.getenv("WEATHER_SERVICE_BASE_URL")
+TOKEN = os.getenv("B_TOKEN")
 
 DATASET_ID = "user_data"
 USER_TABLE = "user_input_table"
@@ -175,10 +176,17 @@ def send_notifications_api():
 
 
 def fetch_weather_from_api(location):
-    print(f"before forming url:\n{location}")
-    url = WEATHER_SERVICE_BASE_URL + "current_weather?location=" + location
-    print(f"after forming url:\n{url}")
-    response = requests.get(url)
+    token = TOKEN
+    if not token:
+        raise RuntimeError("Failed to retrieve identity token for auth.")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    url = f"{WEATHER_SERVICE_BASE_URL}current_weather?location={location}"
+    response = requests.get(url, headers=headers)
     response.raise_for_status()
     data = response.json()
 
