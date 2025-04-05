@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 # Weatherstack API Configuration
-API_KEY = "a8da22591d11224f67c9a5ec111e0e0a"
+API_KEY = "5305733d151328f19223e9440028544d"
 BASE_URL = "http://api.weatherstack.com"
 
 def fetch_weather_data(endpoint, params):
