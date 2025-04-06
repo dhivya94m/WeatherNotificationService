@@ -12,7 +12,7 @@ TABLE_ID = 'user_input_table'
 WEATHER_TABLE_ID = 'weather_data'  # New table for storing weather data
 
 # Weatherstack API Configuration
-API_KEY = "5305733d151328f19223e9440028544d"
+API_KEY = "c001b580aa0ff9075d9e6e2bcf0a9508"
 BASE_URL = "http://api.weatherstack.com"
 
 @app.route('/subscribe', methods=['POST'])
