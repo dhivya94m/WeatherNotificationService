@@ -14,7 +14,7 @@ SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_PHONE = "+17788378660"
-EMAIL_SENDER = "anilasatyavolu@gmail.com"
+EMAIL_SENDER = "anila_satyavolu@sfu.ca"
 
 #Weather-api-service base url
 WEATHER_SERVICE_BASE_URL = os.getenv("WEATHER_SERVICE_BASE_URL")
