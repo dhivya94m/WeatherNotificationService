@@ -18,6 +18,7 @@ EMAIL_SENDER = "anila_satyavolu@sfu.ca"
 
 #Weather-api-service base url
 WEATHER_SERVICE_BASE_URL = os.getenv("WEATHER_SERVICE_BASE_URL")
+USER_SERVICE_BASE_URL = os.getenv("USER_SERVICE_BASE_URL")
 TOKEN = os.getenv("B_TOKEN")
 
 DATASET_ID = "user_data"
@@ -25,32 +26,49 @@ USER_TABLE = "user_input_table"
 WEATHER_TABLE = "weather_data"
 NOTIF_TABLE = "notifications"
 
-def fetch_users():
-    """Fetch users from BigQuery who have a notification method."""
-    query = f"""
-    SELECT user_id, email_id, phone_number, location, notification_method
-    FROM `{DATASET_ID}.{USER_TABLE}`
-    WHERE ARRAY_LENGTH(notification_method) > 0
-    """
-    return [dict(row) for row in client.query(query).result()]
+def fetch_weather_from_api(location):
+    token = TOKEN
+    if not token:
+        raise RuntimeError("Failed to retrieve identity token for auth.")
 
-def fetch_weather(user_id, location):
-    """Fetch latest weather data for the user."""
-    query = f"""
-    SELECT temperature, weather_description, humidity
-    FROM `{DATASET_ID}.{WEATHER_TABLE}`
-    WHERE user_id = @user_id AND location = @location
-    ORDER BY timestamp DESC
-    LIMIT 1
-    """
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("user_id", "STRING", user_id),
-            bigquery.ScalarQueryParameter("location", "STRING", location)
-        ]
-    )
-    result = list(client.query(query, job_config=job_config).result())
-    return result[0] if result else None
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    url = f"{WEATHER_SERVICE_BASE_URL}current_weather?location={location}"
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    data = response.json()
+
+    current = data.get("current", {})
+    print(f"response:\n{data}")
+    return {
+        "weather_description": ", ".join(current.get("weather_descriptions", [])),
+        "temperature": current.get("temperature"),
+        "humidity": current.get("humidity"),
+        "icon": current.get("weather_icons", [""])[0]
+    }
+
+
+def fetch_users_from_api():
+    token = TOKEN
+    if not token:
+        raise RuntimeError("Failed to retrieve identity token for auth.")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    url = f"{USER_SERVICE_BASE_URL}/users"  # Replace with actual service URL
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    data = response.json()
+
+    print(f"Fetched users:\n{data}")
+    return [user for user in data ]
+
 
 def send_email(recipient, subject, message):
     """Send email via SendGrid."""
@@ -95,6 +113,45 @@ def log_notification(user_id, location, method, status, message):
     ]
     client.insert_rows_json(f"{DATASET_ID}.{NOTIF_TABLE}", rows_to_insert)
 
+
+@app.route('/send_notifications_api', methods=['POST'])
+def send_notifications_api():
+    """Fetch users, get weather, and send notifications."""
+    users = fetch_users_from_api()
+    if not users:
+        return jsonify({"message": "No users with notifications set."}), 200
+
+    notifications = []
+
+    for user in users:
+        user_id = user["user_id"]
+        location = user["location"]
+        weather = fetch_weather_from_api(location)
+
+        if not weather:
+            continue
+
+        message = (f"Hello! Weather update for {location}: "
+                   f"{weather['weather_description']}, "
+                   f"Temp: {weather['temperature']}°C, "
+                   f"Humidity: {weather['humidity']}%.")
+
+        print(f"Message:\n{message}")
+
+        for method in user["notification_method"]:
+            if method == "email" and user["email_id"]:
+                status = send_email(user["email_id"], "Weather Update", message)
+            elif method == "SMS" and user["phone_number"]:
+                status = send_sms(user["phone_number"], message)
+            else:
+                continue
+
+            log_notification(user_id, location, method, status, message)
+            notifications.append({"user_id": user_id, "method": method, "status": status})
+
+    return jsonify({"notifications_sent": notifications}), 200
+
+
 @app.route('/send_notifications', methods=['POST'])
 def send_notifications():
     """Fetch users, get weather, and send notifications."""
@@ -137,67 +194,33 @@ def get_notification_logs():
     results = client.query(query).result()
     return jsonify([dict(row) for row in results])
 
-@app.route('/send_notifications_api', methods=['POST'])
-def send_notifications_api():
-    """Fetch users, get weather, and send notifications."""
-    users = fetch_users()
-    if not users:
-        return jsonify({"message": "No users with notifications set."}), 200
 
-    notifications = []
+def fetch_users():
+    """Fetch users from BigQuery who have a notification method."""
+    query = f"""
+    SELECT user_id, email_id, phone_number, location, notification_method
+    FROM `{DATASET_ID}.{USER_TABLE}`
+    WHERE ARRAY_LENGTH(notification_method) > 0
+    """
+    return [dict(row) for row in client.query(query).result()]
 
-    for user in users:
-        user_id = user["user_id"]
-        location = user["location"]
-        weather = fetch_weather_from_api(location)
-
-        if not weather:
-            continue
-
-        message = (f"Hello! Weather update for {location}: "
-                   f"{weather['weather_description']}, "
-                   f"Temp: {weather['temperature']}°C, "
-                   f"Humidity: {weather['humidity']}%.")
-
-        print(f"Message:\n{message}")
-
-        for method in user["notification_method"]:
-            if method == "email" and user["email_id"]:
-                status = send_email(user["email_id"], "Weather Update", message)
-            elif method == "SMS" and user["phone_number"]:
-                status = send_sms(user["phone_number"], message)
-            else:
-                continue
-
-            log_notification(user_id, location, method, status, message)
-            notifications.append({"user_id": user_id, "method": method, "status": status})
-
-    return jsonify({"notifications_sent": notifications}), 200
-
-
-def fetch_weather_from_api(location):
-    token = TOKEN
-    if not token:
-        raise RuntimeError("Failed to retrieve identity token for auth.")
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-
-    url = f"{WEATHER_SERVICE_BASE_URL}current_weather?location={location}"
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    data = response.json()
-
-    current = data.get("current", {})
-    print(f"response:\n{data}")
-    return {
-        "weather_description": ", ".join(current.get("weather_descriptions", [])),
-        "temperature": current.get("temperature"),
-        "humidity": current.get("humidity"),
-        "icon": current.get("weather_icons", [""])[0]
-    }
+def fetch_weather(user_id, location):
+    """Fetch latest weather data for the user."""
+    query = f"""
+    SELECT temperature, weather_description, humidity
+    FROM `{DATASET_ID}.{WEATHER_TABLE}`
+    WHERE user_id = @user_id AND location = @location
+    ORDER BY timestamp DESC
+    LIMIT 1
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("user_id", "STRING", user_id),
+            bigquery.ScalarQueryParameter("location", "STRING", location)
+        ]
+    )
+    result = list(client.query(query, job_config=job_config).result())
+    return result[0] if result else None
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
