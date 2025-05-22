@@ -1,0 +1,116 @@
+dataContractSpecification: 0.9.3
+
+id: urn:datacontract:cavallobank:lctr-gold-unreviewed
+
+info:
+  title: LCTR Gold Unreviewed
+  version: 1.0.0
+  description: >
+    Business-level transaction summaries for LCTR pipeline.
+    Returns latest LCTR records required for business reporting and analytics.
+  owner: Data Engineering Team
+  contact:
+    url: adabhi@cavallotechnologies.ca
+  slackChannel: '#data-lctr-gold'
+
+servers:
+  production:
+    type: databricks
+    host: adb-4456454124752048.8.azuredatabricks.net
+    catalog: rapid_delivery_dev
+    schema: rde_gold
+    description: Production server
+    environment: main
+    format: delta
+    location:
+
+terms:
+  usage: |
+    Data can be used for business reporting, analytics, and machine learning use cases.Records reflect the latest approved transaction summaries for downstream consumption.
+  limitations: |
+    Not suitable for real-time transactional processing.
+    Data may be subject to latency due to batch processing.
+  billing: 0 USD per month
+  noticePeriod: P2M
+
+models:
+  lctr_gold_unreviewed:
+    description: Business-level transaction summaries with minimal required fields.
+    type: table
+    fields:
+      Account ID:
+        type: text
+        format: uuid
+        required: true
+        description: >
+          The account ID of the LCTR as defined by CavalloBank.
+      Transaction Date:
+        type: date
+        required: true
+        description: Transaction date in ISO 8601 format (YYYY-MM-DD).
+        # example: 2025-12-13
+      Amount:
+        # title: Transaction Amount
+        type: number
+        format: decimal
+        minimum: 0
+        required: true
+        description: Transaction amount in the transaction currency.
+        # example: 1299.99
+      TransactionID:
+        # title: Transaction ID
+        type: text
+        required: true
+        unique: true
+        format: uuid
+        description: This is the transaction id of the account.
+        # example: 'e7d3f4a1c5b8f7a0d9e6c3b2a1f8d9c0b7e5f6d3'
+examples:
+- type: delta
+  description: An example list of the LCTRs.
+  model: lctr_gold_unreviewed
+  data: |
+    Date, Amount, AccountId, TransactionID
+    "2025-01-13" 14413.05, "0df9b9b8-5889-401c-90f8-701c4b190ace", "b783b14547e6d17102f2ee9e1fffd3443ba45b67"
+servicelevels:
+  availability:
+    description: The server is available during support hours
+    percentage: 99.9%
+  retention:
+    description: Data is retained for one year
+    period: P1Y
+    unlimited: false
+  latency:
+    description: Data is available within 1 hour of new LCTR file arrival.
+    threshold: 25h
+    sourceTimestampField: orders.order_timestamp
+    processedTimestampField: orders.processed_timestamp
+  freshness:
+    description: The age of the youngest row in a table.
+    threshold: 25h
+    timestampField: rde_lctr_gold_unreviewed.file_processing_time
+  frequency:
+    description: Data is delivered whenever the end user logs into their system.
+    type: streaming
+    interval: daily
+    cron: 0 0 * * * unsure
+  support:
+    description: The data is available during typical business hours on the application.
+    time: 9am to 5pm in PST on business days
+    responseTime: 1h
+  backup:
+    description: Data is backed up once a week, every Sunday at 0:00 UTC.
+    interval: weekly
+    cron: 0 0 * * 0
+    recoveryTime: 24 hours
+    recoveryPoint: 1 week
+quality:
+    type: text
+    specification:
+      checks for Transaction Amount:
+      - amount > 0
+      - AccountId != null
+tags:
+- RDE
+- LCTR
+- databricks
